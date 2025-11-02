@@ -1,78 +1,97 @@
-import { createServer } from "http";
-import { Server } from "socket.io";
-import { createAdapter } from "@socket.io/redis-adapter";
-import Redis from "ioredis";
-import type { NewMessageData } from "./type";
+import type { ConnectedData, MessageData } from "./types";
 
-// Konfigurasi koneksi Redis
-const REDIS_HOST = "0.0.0.0";
-const REDIS_PORT = 6379;
+Bun.serve({
+  hostname: "0.0.0.0",
+  port: 4000,
+  fetch(req, server) {
+    const { searchParams } = new URL(req.url);
+    const user_id = searchParams.get("user_id");
 
-// 1. Buat klien Pub/Sub Redis
-// Klien "pubClient" digunakan untuk menerbitkan pesan (publish)
-const pubClient = new Redis({ host: REDIS_HOST, port: REDIS_PORT });
+    if (!user_id) {
+      return new Response("Missing user_id", { status: 400 });
+    }
 
-// Klien "subClient" harus di-duplicate dari pubClient karena klien Pub/Sub tidak dapat digunakan untuk tujuan lain
-// Klien "subClient" digunakan untuk mendengarkan pesan (subscribe)
-const subClient = pubClient.duplicate();
-
-// 2. Buat HTTP server
-const httpServer = createServer();
-
-// 3. Buat instance Socket.IO Server
-const io = new Server(httpServer, {
-  cors: {
-    origin: "*", // Ganti dengan domain klien Anda
-    methods: ["GET", "POST"],
+    // upgrade the request to a WebSocket
+    if (
+      server.upgrade(req, {
+        data: {
+          user_id,
+        },
+      })
+    ) {
+      return undefined;
+    }
+    return new Response("Upgrade failed", { status: 500 });
   },
+  websocket: {
+    data: {} as ConnectedData,
+    open(ws) {
+      ws.subscribe(ws.data.user_id);
+      console.log("Klien baru terkoneksi : " + ws.data.user_id);
+    }, // a socket is opened
+    message(ws, message) {
+      let data: MessageData;
+
+      try {
+        data = JSON.parse(message as string);
+      } catch (error) {
+        ws.send(JSON.stringify({ error: "Message type not recognized" }));
+        return;
+      }
+
+      if (!data.conversation_id) {
+        ws.send(JSON.stringify({ error: "Please include conversation id" }));
+        return;
+      }
+
+      let dataToSend: MessageData = {
+        id: data.id,
+        type: data.type,
+        sender_id: ws.data.user_id,
+        conversation_id: data.conversation_id,
+        text: data.text,
+        is_read: false,
+        media: [],
+        created_at: data.created_at,
+      };
+
+      switch (data.type) {
+        case "JOIN_CONVERSATION":
+          //   ws.publish(data.conversation_id, "ACK_READ");
+          console.log("Join " + data.conversation_id);
+          ws.subscribe(data.conversation_id);
+          break;
+        case "LEAVE_CONVERSATION":
+          console.log("Leave " + data.conversation_id);
+          ws.unsubscribe(data.conversation_id);
+          break;
+        case "ORDER":
+          if (!data.order_id) {
+            ws.send(JSON.stringify({ error: "Please include order id" }));
+          }
+
+          dataToSend["type"] = "ORDER";
+          dataToSend["order_id"] = data.order_id;
+
+          ws.send(JSON.stringify(dataToSend));
+          break;
+        case "TEXT":
+          if (!data.text) {
+            ws.send(JSON.stringify({ error: "Please send text" }));
+          }
+          console.log(data);
+
+          ws.publish(data.conversation_id, JSON.stringify(dataToSend));
+
+          break;
+        default:
+          ws.send(JSON.stringify({ error: "Message type not recognized" }));
+          break;
+      }
+    }, // a message is received
+    close(ws, code, message) {}, // a socket is closed
+    drain(ws) {}, // the socket is ready to receive more data
+  }, // handlers
 });
 
-// 4. Pasang Redis Adapter ke Socket.IO
-// Ini memungkinkan server untuk bertukar pesan dengan server Socket.IO lain melalui Redis
-io.adapter(createAdapter(pubClient, subClient));
-
-// 5. Tangani koneksi Socket.IO
-io.on("connection", (socket) => {
-  console.log(`Socket terhubung: ${socket.id}`);
-
-  socket.on("join_conversation", (conversation_id) => {
-    socket.join(conversation_id);
-    console.log(`${socket.id} joined conversation ${conversation_id}`);
-  });
-
-  socket.on("subscribe_notifications", (userId) => {
-    socket.join(userId);
-    console.log(`${userId} subscribe notifications `);
-  });
-
-  socket.on("send_message", (data: NewMessageData, callback) => {
-    console.log(data);
-
-    socket.to(data.conversation_id).emit("send_message", data);
-
-    io.to(data.receiver_id).emit("new_message", data);
-
-    callback({
-      status: "Pesan terkirim di server",
-    });
-  });
-
-  socket.on("receive_message", (conversation_id, message_id) => {
-    socket.to(conversation_id).emit("receive_message", message_id);
-  });
-
-  socket.on("leave_conversation", (conversation_id) => {
-    socket.leave(conversation_id);
-    console.log(`${socket.id} left conversation ${conversation_id}`);
-  });
-
-  socket.on("disconnect", () => {
-    console.log(`Socket terputus: ${socket.id}`);
-  });
-});
-
-// 6. Jalankan server di Bun
-const PORT = 4000;
-httpServer.listen(PORT, "0.0.0.0", () => {
-  console.log(`Server Socket.IO berjalan di http://localhost:${PORT}`);
-});
+console.log("Berjalan di http://localhost:4000");
