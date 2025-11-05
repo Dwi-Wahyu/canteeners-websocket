@@ -84,6 +84,30 @@ Bun.serve({
           ws.publish(data.conversation_id, JSON.stringify(dataToSend));
 
           break;
+        case "SUBSCRIBE_ORDER":
+          if (!data.order_id) {
+            ws.send(JSON.stringify({ error: "Please send order id" }));
+            return;
+          }
+          console.log("Subscribe order changes : " + data.order_id);
+          ws.subscribe(data.order_id);
+          break;
+        case "UNSUBSCRIBE_ORDER":
+          if (!data.order_id) {
+            ws.send(JSON.stringify({ error: "Please send order id" }));
+            return;
+          }
+          console.log("Unsubscribe order changes : " + data.order_id);
+          ws.unsubscribe(data.order_id);
+          break;
+        case "UPDATE_ORDER":
+          if (!data.order_id) {
+            ws.send(JSON.stringify({ error: "Please send order id" }));
+            return;
+          }
+          console.log("Unsubscribe order changes : " + data.order_id);
+          ws.publish(data.order_id, "UPDATED");
+          break;
         default:
           ws.send(JSON.stringify({ error: "Message type not recognized" }));
           break;

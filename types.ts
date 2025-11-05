@@ -10,7 +10,12 @@ export type MessageData = {
     | "PAYMENT_PROOF"
     | "JOIN_CONVERSATION"
     | "LEAVE_CONVERSATION"
-    | "ACK_READ";
+    | "ACK_READ"
+    | "ACK_DELIVERY"
+    | "NEW_ORDER"
+    | "SUBSCRIBE_ORDER"
+    | "UNSUBSCRIBE_ORDER"
+    | "UPDATE_ORDER";
   id: string;
   sender_id: string;
   conversation_id: string;
