@@ -57,7 +57,6 @@ Bun.serve({
 
       switch (data.type) {
         case "JOIN_CONVERSATION":
-          //   ws.publish(data.conversation_id, "ACK_READ");
           console.log("Join " + data.conversation_id);
           ws.subscribe(data.conversation_id);
           break;
@@ -65,19 +64,45 @@ Bun.serve({
           console.log("Leave " + data.conversation_id);
           ws.unsubscribe(data.conversation_id);
           break;
+        case "ACK_READ":
+          if (!data.conversation_id) {
+            ws.send(JSON.stringify({ error: "Please send conversation id" }));
+            return;
+          }
+
+          const ackData = {
+            type: "ACK_READ",
+            conversation_id: data.conversation_id,
+            created_at: data.created_at,
+          };
+
+          ws.publish(data.conversation_id, JSON.stringify(ackData));
+
+          console.log(
+            "Membaca pesan di conversation id " + data.conversation_id
+          );
+          break;
         case "ORDER":
           if (!data.order_id) {
             ws.send(JSON.stringify({ error: "Please include order id" }));
+            return;
+          }
+
+          if (!data.receiver_id) {
+            ws.send(JSON.stringify({ error: "Please include owner id" }));
+            return;
           }
 
           dataToSend["type"] = "ORDER";
           dataToSend["order_id"] = data.order_id;
 
           ws.send(JSON.stringify(dataToSend));
+
           break;
         case "TEXT":
           if (!data.text) {
             ws.send(JSON.stringify({ error: "Please send text" }));
+            return;
           }
           console.log(data);
 

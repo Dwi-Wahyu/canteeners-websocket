@@ -16,9 +16,11 @@ export type MessageData = {
     | "SUBSCRIBE_ORDER"
     | "UNSUBSCRIBE_ORDER"
     | "UPDATE_ORDER";
+
   id: string;
   sender_id: string;
   conversation_id: string;
+  receiver_id?: string;
   text?: string;
   is_read: boolean;
   media: MessageMedia[];
