@@ -39,11 +39,6 @@ Bun.serve({
         return;
       }
 
-      if (!data.conversation_id) {
-        ws.send(JSON.stringify({ error: "Please include conversation id" }));
-        return;
-      }
-
       let dataToSend: MessageData = {
         id: data.id,
         type: data.type,
@@ -57,10 +52,24 @@ Bun.serve({
 
       switch (data.type) {
         case "JOIN_CONVERSATION":
+          if (!data.conversation_id) {
+            ws.send(
+              JSON.stringify({ error: "Please include conversation id" })
+            );
+            return;
+          }
+
           console.log("Join " + data.conversation_id);
           ws.subscribe(data.conversation_id);
           break;
         case "LEAVE_CONVERSATION":
+          if (!data.conversation_id) {
+            ws.send(
+              JSON.stringify({ error: "Please include conversation id" })
+            );
+            return;
+          }
+
           console.log("Leave " + data.conversation_id);
           ws.unsubscribe(data.conversation_id);
           break;
@@ -100,6 +109,13 @@ Bun.serve({
 
           break;
         case "TEXT":
+          if (!data.conversation_id) {
+            ws.send(
+              JSON.stringify({ error: "Please include conversation id" })
+            );
+            return;
+          }
+
           if (!data.text) {
             ws.send(JSON.stringify({ error: "Please send text" }));
             return;
@@ -130,8 +146,23 @@ Bun.serve({
             ws.send(JSON.stringify({ error: "Please send order id" }));
             return;
           }
-          console.log("Unsubscribe order changes : " + data.order_id);
-          ws.publish(data.order_id, "UPDATED");
+          console.log("Update order changes : " + data.order_id);
+          ws.publish(data.order_id, JSON.stringify({ type: "UPDATE_ORDER" }));
+          break;
+        case "NEW_ORDER":
+          if (!data.receiver_id) {
+            ws.send(JSON.stringify({ error: "Please send owner id" }));
+            return;
+          }
+          if (!data.order_id) {
+            ws.send(JSON.stringify({ error: "Please send order id" }));
+            return;
+          }
+          console.log("Order baru muncul : " + data.order_id);
+          ws.publish(
+            data.receiver_id,
+            JSON.stringify({ type: "NEW_ORDER", order_id: data.order_id })
+          );
           break;
         default:
           ws.send(JSON.stringify({ error: "Message type not recognized" }));
